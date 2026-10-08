@@ -1,0 +1,67 @@
+<style>
+  body { font: 12px/1.4 Inter, system-ui, sans-serif; margin: 12px; color: var(--figma-color-text); background: var(--figma-color-bg); }
+  h3 { margin: 12px 0 6px; font-size: 13px; }
+  textarea { width: 100%; height: 190px; box-sizing: border-box; font: 11px/1.35 monospace; color: inherit; background: var(--figma-color-bg-secondary); border: 1px solid var(--figma-color-border); border-radius: 4px; padding: 6px; }
+  button { margin: 6px 6px 0 0; padding: 6px 12px; border-radius: 4px; border: 0; cursor: pointer; background: var(--figma-color-bg-brand); color: var(--figma-color-text-onbrand); }
+  button.sec { background: var(--figma-color-bg-secondary); color: inherit; border: 1px solid var(--figma-color-border); }
+  #out { white-space: pre-wrap; font: 11px/1.35 monospace; margin-top: 6px; max-height: 110px; overflow: auto; }
+  .hint { color: var(--figma-color-text-secondary); }
+</style>
+<div class="hint" id="bst">Мост с Claude: подключаюсь…</div>
+<h3>1. Выгрузить тексты</h3>
+<div class="hint">Все фреймы страницы или только выделенные. Скопируй и пришли Claude.</div>
+<button id="exp">Выгрузить</button><button class="sec" id="copy">Копировать</button>
+<textarea id="dump" readonly></textarea>
+<h3>2. Применить правки</h3>
+<div class="hint">Вставь JSON от Claude: {"edits":[…],"add":[…],"note":[…],"style":[…],"remove":[…],"hide":[…],"check":[…]}</div>
+<textarea id="plan"></textarea>
+<button id="apply">Применить</button><button class="sec" id="chk">Проверить суммы</button>
+<div id="out"></div>
+<script>
+  const $ = id => document.getElementById(id);
+  $('exp').onclick = () => parent.postMessage({ pluginMessage: { type: 'export' } }, '*');
+  $('copy').onclick = () => { $('dump').select(); document.execCommand('copy'); $('out').textContent = 'Скопировано'; };
+  $('apply').onclick = () => {
+    try { JSON.parse($('plan').value); } catch (e) { $('out').textContent = 'JSON не читается: ' + e.message; return; }
+    parent.postMessage({ pluginMessage: { type: 'apply', json: $('plan').value } }, '*');
+  };
+  $('chk').onclick = () => {
+    try { JSON.parse($('plan').value); } catch (e) { $('out').textContent = 'JSON не читается: ' + e.message; return; }
+    parent.postMessage({ pluginMessage: { type: 'check', json: $('plan').value } }, '*');
+  };
+  const chkText = c => !c || !c.total ? '' : c.bad.length ? `Суммы: ошибок ${c.bad.length} из ${c.total}\n` + c.bad.join('\n') : `Суммы: все ${c.total} сходятся`;
+  onmessage = e => {
+    const m = e.data.pluginMessage;
+    if (m.type === 'exported') { $('dump').value = m.text; $('out').textContent = 'Строк: ' + m.text.split('\n').length; }
+    if (m.type === 'applied') { const r = m.res; $('out').textContent = `Изменено ${r.changed}, без изменений ${r.same}, удалено ${r.removed}, скрыто ${r.hidden}\n` + (r.added && r.added.length ? 'Добавлено:\n' + r.added.join('\n') + '\n' : '') + (r.skipped.length ? 'Пропущено:\n' + r.skipped.join('\n') + '\n' : '') + (r.fonts && r.fonts.length ? 'Шрифт заменён на установленный:\n' + r.fonts.join('\n') + '\n' : '') + chkText(r.check); }
+    if (m.type === 'checked') $('out').textContent = chkText(m.res) || 'В JSON нет блока "check"';
+    if (m.type === 'error') $('out').textContent = 'Ошибка: ' + m.text;
+    if (m.type === 'bridge') {
+      const out = { id: m.req, ok: m.ok, data: m.data };
+      if (m.data instanceof Uint8Array) {
+        let s = ''; const a = m.data;
+        for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode.apply(null, a.subarray(i, i + 0x8000));
+        out.data = btoa(s); out.b64 = true;
+      }
+      fetch(BRIDGE + '/result', { method: 'POST', body: JSON.stringify(out) }).catch(() => {});
+      $('bst').textContent = 'Мост с Claude: выполнено «' + m.cmd + '»' + (m.ok ? '' : ' — ошибка');
+    }
+  };
+  // Локальный мост (bridge.js на этом компьютере): забираем команды Claude и отдаём результат
+  const BRIDGE = 'http://localhost:3055';
+  (async () => {
+    for (;;) {
+      try {
+        const r = await fetch(BRIDGE + '/poll');
+        if (r.status === 200) {
+          const c = await r.json();
+          $('bst').textContent = 'Мост с Claude: выполняю «' + c.type + '»…';
+          parent.postMessage({ pluginMessage: { type: c.type, payload: c.payload, req: c.id } }, '*');
+        } else if ($('bst').textContent.indexOf('подключ') >= 0 || $('bst').textContent.indexOf('не запущен') >= 0) $('bst').textContent = 'Мост с Claude: на связи';
+      } catch (e) {
+        $('bst').textContent = 'Мост с Claude: не запущен (правки можно вставлять вручную)';
+        await new Promise(ok => setTimeout(ok, 3000));
+      }
+    }
+  })();
+</script>

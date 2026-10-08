@@ -1,0 +1,6 @@
+# Личное каждого ПМа — в общий репозиторий не попадает
+MY-RULES.md
+projects/
+
+node_modules/
+*.pdf
