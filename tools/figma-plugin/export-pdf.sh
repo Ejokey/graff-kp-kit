@@ -19,10 +19,8 @@ OUT="${ARGS[0]:?укажи путь итогового PDF}"
 DPI="${ARGS[1]:-84}"; Q="${ARGS[2]:-58}"; MQ="${ARGS[3]:-78}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 B="$HERE/bridge.js"
-# compress-figma-pdf.py: в AI_Skills — scripts/, в наборе для коллег — рядом с папкой плагина
-COMPRESS=""
-for c in "$HERE/../compress-figma-pdf.py" "$HERE/../../../../scripts/compress-figma-pdf.py"; do [ -f "$c" ] && COMPRESS="$c" && break; done
-[ -n "$COMPRESS" ] || { echo "не найден compress-figma-pdf.py"; exit 1; }
+COMPRESS="$HERE/../compress-figma-pdf.py"
+[ -f "$COMPRESS" ] || { echo "не найден tools/compress-figma-pdf.py"; exit 1; }
 # Python: переменная PYTHON, иначе Python 3.12 из стандартной папки Windows, иначе python из PATH
 PY="${PYTHON:-$LOCALAPPDATA/Programs/Python/Python312/python.exe}"
 [ -x "$PY" ] || PY=python
